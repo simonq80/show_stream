@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 import re
 import urllib.parse
 from dateutil.parser import parse as dateparse
+from threading import Thread
+from time import sleep
 
 
 db_path = 'mysql+pymysql://root:mysql@localhost:32775/db1'
@@ -80,7 +82,6 @@ class show(db.Model):
                 e = episode(name=ep['name'], link=ep['link'], date=ep['date'], watched=False)
 
                 self.episodes.append(e)
-        print(self)
         db.session.add(self)
         db.session.commit()
 
@@ -139,10 +140,6 @@ def add_how():
 
     return render_template('add_show.html', message=message, message_string=message_string)
 
-    dev = db.session.query(show).all()
-    print([d.name for d in dev])
-    return 'asd'
-
 @app.route('/show/<show_id>')
 def show_info(show_id):
     s = db.session.query(show).filter(show.id == show_id).one_or_none()
@@ -190,8 +187,18 @@ def delete_show(show_id):
         s.delete()
     return redirect('/', code=302)
 
+@app.route('/update_shows')
+def update_shows():
+    s = db.session.query(show).all()
+    for sh in s:
+        sh.get_episodes()
+    return 'success'
 
 
+def show_updater():
+    while True:
+        sleep(1200)
+        requests.get('http://0.0.0.0:8000/update_shows')
 
 
 
@@ -200,4 +207,6 @@ def delete_show(show_id):
 
 if __name__ == "__main__":
     db.create_all()
+    thread = Thread(target=show_updater)
+    thread.start()
     app.run(host='0.0.0.0', port=8000)
