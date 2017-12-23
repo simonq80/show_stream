@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request
+from flask import Flask, render_template, request, redirect
 from flask_sqlalchemy import SQLAlchemy
 import json
 import requests
@@ -82,6 +82,15 @@ class show(db.Model):
                 self.episodes.append(e)
         print(self)
         db.session.add(self)
+        db.session.commit()
+
+    def get_next_episode(self):
+        eps = [[e.name, e.link, e.date] for e in self.episodes if e.watched == False]
+        mi = ['', '' , datetime.now()]
+        for e in eps:
+            if e[2] < mi[2]:
+                mi = e
+        return mi
 
     def __repr__(self):
         return self.name + self.site + self.search + self.user + str([e.name for e in self.episodes])
@@ -102,36 +111,51 @@ class episode(db.Model):
         return '{} {} {} {}'.format(self.name, self.link, str(self.date), str(self.watched))
 
 @app.route('/')
-def d(name=None, remove=None):
-    shows = db.session.query(show).all()
-    n= str(len(shows))
-    s = show(name=('show' + n), search_string=('http://show/' + n))
-    for i in range(0, len(shows)):
-        s.episodes.append(episode(name=('episode'+n+str(i)), date=datetime.now(),watched=False))
-    db.session.add(s)
-    db.session.commit()
-    return str([[(e.name, e.watched) for e in s.episodes] for s in shows])
+def m():
+    s = db.session.query(show).all()
+    shows = [[sh.name, sh.id, sh.get_next_episode()[0]] for sh in s]
+    return render_template('main.html', shows=shows)
 
-def new_episodes(show_name):
-    pass
-
-@app.route('/add_show', methods=['GET'])
-def add_show():
-    show_name = 'Imouto1234'
-    site = 'nyaa.si'
-    search = 'Imouto sa [1080p]'
-    user = 'HorribleSubs'
-
-    s = show(name=show_name, site=site, search=search, user=user)
-    s.get_episodes()
-    db.session.commit()
-    return 'asdf'
-
-@app.route('/ad', methods=['GET'])
+@app.route('/add_show', methods=['GET', 'POST'])
 def add_how():
+    message = False
+    message_string = ''
+    if request.method == "POST":
+        message = True
+        try:
+            s = show(name=request.form["sname"], site=request.form["site"], search=request.form["sstring"], user=request.form["uploader"])
+            s.get_episodes()
+            message_string = 'Show Added'
+        except:
+            message_string = 'Something Went wrong'
+
+
+    return render_template('add_show.html', message=message, message_string=message_string)
+
     dev = db.session.query(show).all()
     print([d.name for d in dev])
     return 'asd'
+
+@app.route('/download_next/<show_id>')
+def download(show_id):
+    s = db.session.query(show).filter(show.id == show_id).one_or_none()
+    if not s:
+        return 'show not found'
+    next_ep = s.get_next_episode()
+    ep = db.session.query(episode).filter(episode.name == next_ep[0]).one_or_none()
+    if ep:
+        ep.watched = True
+        db.session.add(ep)
+        db.session.commit()
+    return redirect(next_ep[1], code=302)
+
+@app.route('/download_ep/<ep_name>')
+def download_ep(ep_name):
+    return 'epdownload'
+
+
+
+
 
 
 
