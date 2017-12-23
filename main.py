@@ -6,6 +6,7 @@ from datetime import datetime
 from bs4 import BeautifulSoup
 import re
 import urllib.parse
+from dateutil.parser import parse as dateparse
 
 
 db_path = 'mysql+pymysql://root:mysql@localhost:32775/db1'
@@ -15,14 +16,15 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
 def fetch_nyaa(search, user):
-    search = [urllib.parse.quote(s) for s in search]
+    search = urllib.parse.quote(search)
     user = urllib.parse.quote(user)
     ss = 'https://nyaa.si/user/{}?f=0&c=0_0&q={}'
-    req = ss.format(user, '+'.join(search))
+    req = ss.format(user, search)
     data = requests.get(req).text
     s = BeautifulSoup(data)
     table = s.find('table', class_='torrent-list')
     rows = table.tbody.findAll('tr')
+    episodes = []
     for row in rows:
         cells = row.findAll('td')
         try:
@@ -32,12 +34,17 @@ def fetch_nyaa(search, user):
                 if 'comment' not in l.get('title'):
                     lstr = l.string
             magnet = cells[2].find('a', href=re.compile('magnet:?'))
-            print(lstr)
-            print(magnet.get('href'))
+            date = dateparse(cells[4].string)
+            episodes.append(
+                {
+                    'name': lstr,
+                    'link': magnet.get('href'),
+                    'date': date
+                }
+            )
         except:
             pass
-
-    return None
+    return episodes
 
 
 site_methods = {
@@ -56,21 +63,43 @@ def fetch_episodes(site, search, user=None):
 class show(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(80), unique=True, nullable=False)
-    search_string = db.Column(db.String(300), unique=True, nullable=False)
+    site = db.Column(db.String(80), nullable=False)
+    search = db.Column(db.String(80), nullable=False)
+    user = db.Column(db.String(80), nullable=False)
 
     @staticmethod
-    def add_show(searchurl):
+    def add_show():
         return None
+
+    def get_episodes(self):
+        current_eps = [e.name for e in self.episodes]
+        eps = fetch_episodes(self.site, self.search, self.user)
+
+        for ep in eps:
+            if(ep['name'] not in current_eps):
+                e = episode(name=ep['name'], link=ep['link'], date=ep['date'], watched=False)
+
+                self.episodes.append(e)
+        print(self)
+        db.session.add(self)
+
+    def __repr__(self):
+        return self.name + self.site + self.search + self.user + str([e.name for e in self.episodes])
+
 
 
 class episode(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
+    link = db.Column(db.String(500), nullable=False)
     date = db.Column(db.DateTime)
     show_id = db.Column(db.Integer, db.ForeignKey('show.id'),
         nullable=False)
     show = db.relationship('show', backref=db.backref('episodes', lazy=True))
     watched = db.Column(db.Boolean)
+
+    def __repr__(self):
+        return '{} {} {} {}'.format(self.name, self.link, str(self.date), str(self.watched))
 
 @app.route('/')
 def d(name=None, remove=None):
@@ -82,6 +111,28 @@ def d(name=None, remove=None):
     db.session.add(s)
     db.session.commit()
     return str([[(e.name, e.watched) for e in s.episodes] for s in shows])
+
+def new_episodes(show_name):
+    pass
+
+@app.route('/add_show', methods=['GET'])
+def add_show():
+    show_name = 'Imouto1234'
+    site = 'nyaa.si'
+    search = 'Imouto sa [1080p]'
+    user = 'HorribleSubs'
+
+    s = show(name=show_name, site=site, search=search, user=user)
+    s.get_episodes()
+    db.session.commit()
+    return 'asdf'
+
+@app.route('/ad', methods=['GET'])
+def add_how():
+    dev = db.session.query(show).all()
+    print([d.name for d in dev])
+    return 'asd'
+
 
 
 
