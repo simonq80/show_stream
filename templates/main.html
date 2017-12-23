@@ -17,7 +17,7 @@
       <tbody>
       {% for row in shows %}
           <tr>
-            <td>{{ row[0] }}</td>
+            <td><a href="/show/{{ row[1] }}">{{ row[0] }}</a></td>
             <td><a href="/download_next/{{ row[1] }}">{{ row[2]}}</a></td>
           </tr>
       {% endfor %}

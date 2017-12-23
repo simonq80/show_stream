@@ -86,11 +86,18 @@ class show(db.Model):
 
     def get_next_episode(self):
         eps = [[e.name, e.link, e.date] for e in self.episodes if e.watched == False]
-        mi = ['', '' , datetime.now()]
+        mi = ['No New Episode', '' , datetime.now()]
         for e in eps:
             if e[2] < mi[2]:
                 mi = e
         return mi
+
+    def delete(self):
+        for ep in self.episodes:
+            db.session.delete(ep)
+        db.session.commit()
+        db.session.delete(self)
+        db.session.commit()
 
     def __repr__(self):
         return self.name + self.site + self.search + self.user + str([e.name for e in self.episodes])
@@ -136,6 +143,17 @@ def add_how():
     print([d.name for d in dev])
     return 'asd'
 
+@app.route('/show/<show_id>')
+def show_info(show_id):
+    s = db.session.query(show).filter(show.id == show_id).one_or_none()
+    if not s:
+        return 'show not found'
+    eps = [[e.name, e.date, e.id, e.watched] for e in s.episodes]
+    eps = sorted(eps, key=lambda ep: ep[1])
+
+    return render_template('show.html', name=s.name, sid=s.id, eps=eps[::-1])
+
+
 @app.route('/download_next/<show_id>')
 def download(show_id):
     s = db.session.query(show).filter(show.id == show_id).one_or_none()
@@ -149,9 +167,28 @@ def download(show_id):
         db.session.commit()
     return redirect(next_ep[1], code=302)
 
-@app.route('/download_ep/<ep_name>')
-def download_ep(ep_name):
-    return 'epdownload'
+@app.route('/download_ep/<ep_id>')
+def download_ep(ep_id):
+    ep = db.session.query(episode).filter(episode.id == ep_id).one_or_none()
+    if ep:
+        return redirect(ep.link, code=302)
+    return ''
+
+@app.route('/watch_ep/<ep_id>')
+def watch_ep(ep_id):
+    ep = db.session.query(episode).filter(episode.id == ep_id).one_or_none()
+    if ep:
+        ep.watched = not ep.watched
+        db.session.add(ep)
+        db.session.commit()
+    return redirect('/show/' + str(ep.show_id), code=302)
+
+@app.route('/delete_show/<show_id>')
+def delete_show(show_id):
+    s = db.session.query(show).filter(show.id == show_id).one_or_none()
+    if s:
+        s.delete()
+    return redirect('/', code=302)
 
 
 
