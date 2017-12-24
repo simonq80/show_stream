@@ -9,9 +9,20 @@ import urllib.parse
 from dateutil.parser import parse as dateparse
 from threading import Thread
 from time import sleep
+import configparser
 
 
-db_path = 'mysql+pymysql://root:mysql@localhost:32775/db1'
+c = configparser.ConfigParser()
+c.read('config.cfg')
+c = c['MAIN']
+db_path = 'mysql+pymysql://{}:{}@{}:{}/{}'.format(c['MYSQL_USER'],
+    c['MYSQL_PASS'], c['MYSQL_HOST'], c['MYSQL_PORT'], c['MYSQL_DB'])
+server_host = c['SERVER_HOST']
+server_port = c['SERVER_PORT']
+nyaa_host = c['NYAA_HOST']
+
+
+# db_path = 'mysql+pymysql://root:mysql@localhost:32775/db1'
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = db_path
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -20,8 +31,8 @@ db = SQLAlchemy(app)
 def fetch_nyaa(search, user):
     search = urllib.parse.quote(search)
     user = urllib.parse.quote(user)
-    ss = 'https://nyaa.si/user/{}?f=0&c=0_0&q={}'
-    req = ss.format(user, search)
+    ss = 'https://{}/user/{}?f=0&c=0_0&q={}'
+    req = ss.format(nyaa_host, user, search)
     data = requests.get(req).text
     s = BeautifulSoup(data)
     table = s.find('table', class_='torrent-list')
@@ -50,7 +61,7 @@ def fetch_nyaa(search, user):
 
 
 site_methods = {
-    'nyaa.si': fetch_nyaa
+    'nyaa': fetch_nyaa
 }
 
 def fetch_episodes(site, search, user=None):
@@ -191,14 +202,17 @@ def delete_show(show_id):
 def update_shows():
     s = db.session.query(show).all()
     for sh in s:
-        sh.get_episodes()
+        try:
+            sh.get_episodes()
+        except:
+            pass
     return 'success'
 
 
 def show_updater():
     while True:
         sleep(1200)
-        requests.get('http://0.0.0.0:8000/update_shows')
+        requests.get('http://{}:{}/update_shows'.format(server_host, server_port))
 
 
 
@@ -209,4 +223,4 @@ if __name__ == "__main__":
     db.create_all()
     thread = Thread(target=show_updater)
     thread.start()
-    app.run(host='0.0.0.0', port=8000)
+    app.run(host=server_host, port=int(server_port))
