@@ -7,7 +7,7 @@ services:
       - "80:80"
 
   db:
-    image: hypriot/rpi-mysql
+    image: mysql
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: mysql
