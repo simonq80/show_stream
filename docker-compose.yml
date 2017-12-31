@@ -5,15 +5,16 @@ services:
     build: .
     ports:
       - "80:80"
+    restart: always
 
   db:
     image: mysql
+     volumes:
+       - db-data:/var/lib/mysql/data
     restart: always
     environment:
       MYSQL_ROOT_PASSWORD: mysql
       MYSQL_DATABASE:   db1
-    ports:
-      - "3306:3306"
 
 volumes:
   db-data:
